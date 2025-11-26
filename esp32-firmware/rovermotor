@@ -5,28 +5,27 @@
 
 // =================== Pines del L298N ===================
 // PUENTE H #1 (4 motores en paralelo → 2 motores lógicos)
-const int IN1_H1 = 1;   // H1-A adelante
-const int IN2_H1 = 2;   // H1-A atrás
-const int IN3_H1 = 3;   // H1-B adelante
-const int IN4_H1 = 4;   // H1-B atrás
+const int IN1_H1 = 1;
+const int IN2_H1 = 2;
+const int IN3_H1 = 3;
+const int IN4_H1 = 4;
 
 // PUENTE H #2 (2 motores → 2 motores lógicos)
-const int IN1_H2 = 5;   // H2-A adelante
-const int IN2_H2 = 6;   // H2-A atrás
-const int IN3_H2 = 7;   // H2-B adelante
-const int IN4_H2 = 8;   // H2-B atrás
+const int IN1_H2 = 5;
+const int IN2_H2 = 6;
+const int IN3_H2 = 7;
+const int IN4_H2 = 8;
 
 // =================== Pines PWM ===================
-// Motores lógicos
-const int PWM_H1_A = 9;     // Puente 1 - Motor A (izquierdo frontal, 2 motores)
-const int PWM_H1_B = 10;    // Puente 1 - Motor B (derecho frontal, 2 motores)
-const int PWM_H2_A = 11;    // Puente 2 - Motor A (izquierdo trasero)
-const int PWM_H2_B = 12;    // Puente 2 - Motor B (derecho trasero)
+const int PWM_H1_A = 9;
+const int PWM_H1_B = 10;
+const int PWM_H2_A = 11;
+const int PWM_H2_B = 12;
 
 // =================== Config PWM ===================
-const int FREQ_PWM = 20000;    // 20 kHz → silencioso y estable
-const int RES_PWM = 10;        // 10 bits → 0-1023
-int velocidad = 900;           // velocidad por defecto
+const int FREQ_PWM = 20000;
+const int RES_PWM = 10;
+int velocidad = 900; // <-- Ahora controlable vía MQTT
 
 const int CH_H1_A = 0;
 const int CH_H1_B = 1;
@@ -40,7 +39,10 @@ const char* password = "rover123";
 // =================== MQTT ===================
 const char* mqtt_server = "192.168.1.100";
 const int mqtt_port = 1883;
-const char* mqtt_topic = "rover/control";
+
+const char* mqtt_topic = "rover/control";   // Movimiento
+const char* mqtt_topic_speed = "rover/speed"; // Velocidad PWM
+
 const char* mqtt_client_id = "RoverESP32";
 
 WiFiClient espClient;
@@ -97,16 +99,9 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
-  unsigned long startAttemptTime = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 20000) {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(300);
     Serial.print(".");
-  }
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("\n❌ No se pudo conectar. Reiniciando...");
-    delay(1000);
-    ESP.restart();
   }
 
   Serial.println("\n✅ WiFi conectado!");
@@ -125,7 +120,7 @@ void setup() {
   server.on("/right", []() { derecha(); ultimoComando = millis(); motorActivo = true; server.send(200, "text/plain", "Derecha"); });
   server.on("/stop", []() { detenerMotores(); ultimoComando = millis(); motorActivo = false; server.send(200, "text/plain", "Stop"); });
 
-  server.on("/", []() { server.send(200, "text/plain", "Rover OK - PWM Enabled"); });
+  server.on("/", []() { server.send(200, "text/plain", "Rover OK - PWM Enabled + MQTT Speed"); });
 
   server.begin();
   Serial.println("🌐 Servidor HTTP listo.");
@@ -162,13 +157,6 @@ void loop() {
     motorActivo = false;
   }
 
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("❌ WiFi perdido - Deteniendo motores");
-    detenerMotores();
-    motorActivo = false;
-    ESP.restart();
-  }
-
   delay(10);
 }
 
@@ -177,41 +165,49 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String msg = "";
   for (int i = 0; i < length; i++) msg += (char)payload[i];
 
-  Serial.println("📩 MQTT: " + msg);
   ultimoComando = millis();
 
-  if (msg == "forward") adelante();
-  else if (msg == "backward") atras();
-  else if (msg == "left") izquierda();
-  else if (msg == "right") derecha();
-  else if (msg == "stop") detenerMotores();
+  if (String(topic) == mqtt_topic) {
+    Serial.println("📩 Movimiento: " + msg);
+
+    if (msg == "forward") adelante();
+    else if (msg == "backward") atras();
+    else if (msg == "left") izquierda();
+    else if (msg == "right") derecha();
+    else if (msg == "stop") detenerMotores();
+  }
+
+  else if (String(topic) == mqtt_topic_speed) {
+    velocidad = constrain(msg.toInt(), 0, 1023);
+    Serial.print("⚡ Nueva velocidad PWM: ");
+    Serial.println(velocidad);
+  }
 }
 
 // =================== MQTT RECONNECT ===================
 void reconnectMQTT() {
-  if (!mqttClient.connected()) {
-    Serial.print("🔄 Conectando a MQTT...");
+  while (!mqttClient.connected()) {
+    Serial.print("🔄 Conectando MQTT...");
     if (mqttClient.connect(mqtt_client_id)) {
-      Serial.println(" OK");
+      Serial.println("OK!");
       mqttClient.subscribe(mqtt_topic);
+      mqttClient.subscribe(mqtt_topic_speed);
     } else {
-      Serial.println(" ERROR, reintentando...");
+      Serial.println("Error. Reintentando...");
+      delay(1000);
     }
   }
 }
 
 // =================== MOVIMIENTOS ===================
-
 void adelante() {
   Serial.println("⬆️ Adelante");
 
-  // Dirección
   digitalWrite(IN1_H1, HIGH); digitalWrite(IN2_H1, LOW);
   digitalWrite(IN3_H1, LOW);  digitalWrite(IN4_H1, HIGH);
   digitalWrite(IN1_H2, LOW);  digitalWrite(IN2_H2, HIGH);
   digitalWrite(IN3_H2, HIGH); digitalWrite(IN4_H2, LOW);
 
-  // Velocidad PWM
   ledcWrite(CH_H1_A, velocidad);
   ledcWrite(CH_H1_B, velocidad);
   ledcWrite(CH_H2_A, velocidad);
@@ -265,10 +261,15 @@ void derecha() {
 void detenerMotores() {
   Serial.println("🛑 Detener motores");
 
-  digitalWrite(IN1_H1, LOW); digitalWrite(IN2_H1, LOW);
-  digitalWrite(IN3_H1, LOW); digitalWrite(IN4_H1, LOW);
-  digitalWrite(IN1_H2, LOW); digitalWrite(IN2_H2, LOW);
-  digitalWrite(IN3_H2, LOW); digitalWrite(IN4_H2, LOW);
+  digitalWrite(IN1_H1, LOW);
+  digitalWrite(IN2_H1, LOW);
+  digitalWrite(IN3_H1, LOW);
+  digitalWrite(IN4_H1, LOW);
+
+  digitalWrite(IN1_H2, LOW);
+  digitalWrite(IN2_H2, LOW);
+  digitalWrite(IN3_H2, LOW);
+  digitalWrite(IN4_H2, LOW);
 
   ledcWrite(CH_H1_A, 0);
   ledcWrite(CH_H1_B, 0);
