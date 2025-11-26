@@ -6,10 +6,10 @@ import paho.mqtt.client as mqtt
 # ============================
 # CONFIGURACIÓN
 # ============================
-ESP32_CONTROL_IP = "192.168.1.101"  # 🚗 ESP32 motores - VERIFICA ESTA IP
+ESP32_CONTROL_IP = "192.168.1.100"  # 🚗 ESP32 motores - VERIFICA ESTA IP
 
 # Configuración MQTT
-MQTT_BROKER = "192.168.1.102"  # IP de tu PC (donde corre el broker)
+MQTT_BROKER = "192.168.1.101"  # IP de tu PC (donde corre el broker)
 MQTT_PORT = 1883
 MQTT_TOPIC = "rover/control"
 MQTT_CLIENT_ID = "RoverController"
