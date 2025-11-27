@@ -37,6 +37,13 @@ class CamaraModerna:
         self.objetos_disponibles = ["person", "car", "bicycle", "dog", "cat", "bottle", "cell phone", "laptop"]
         self.indice_objeto = 0
         
+        # Mejoras de seguimiento
+        self.ultimo_objetivo_visto = None
+        self.frames_sin_objetivo = 0
+        self.max_frames_sin_objetivo = 10  # Tolerancia antes de detenerse
+        self.historial_posiciones = []  # Para suavizado de movimiento
+        self.max_historial = 3
+        
         # MQTT para control
         self.mqtt_client = None
         self.mqtt_conectado = False
@@ -101,55 +108,136 @@ class CamaraModerna:
                 pass
     
     def seguir_objeto(self, detecciones, frame_width, frame_height):
-        """Lógica de seguimiento: calcula posición del objeto y envía comandos"""
-        if not self.seguimiento_activo or not detecciones:
+        """
+        Lógica de seguimiento mejorada con:
+        - Suavizado de movimiento
+        - Tolerancia a pérdida temporal
+        - Selección del objeto más cercano
+        - Control PID simplificado
+        """
+        if not self.seguimiento_activo:
             self.enviar_comando("stop")
+            self.historial_posiciones.clear()
+            self.frames_sin_objetivo = 0
             return
         
-        # Buscar el objeto que queremos seguir
-        objetivo = None
+        # Buscar TODOS los objetos del tipo deseado
+        objetivos_candidatos = []
         for det in detecciones:
             if det['clase'].lower() == self.objeto_seguir.lower():
-                objetivo = det
-                break
+                objetivos_candidatos.append(det)
         
-        if not objetivo:
-            self.enviar_comando("stop")
+        # Si no hay objetivos
+        if not objetivos_candidatos:
+            self.frames_sin_objetivo += 1
+            
+            # Tolerancia: seguir último comando por unos frames
+            if self.frames_sin_objetivo > self.max_frames_sin_objetivo:
+                self.enviar_comando("stop")
+                self.historial_posiciones.clear()
+                self.ultimo_objetivo_visto = None
+            # Sino, mantener último comando para seguir buscando
             return
+        
+        # Resetear contador
+        self.frames_sin_objetivo = 0
+        
+        # Seleccionar el objetivo más apropiado
+        if len(objetivos_candidatos) == 1:
+            objetivo = objetivos_candidatos[0]
+        else:
+            # Si hay múltiples, elegir el más cercano al último visto
+            # o el más grande (más cercano a cámara)
+            if self.ultimo_objetivo_visto:
+                objetivo = self._seleccionar_objetivo_cercano(
+                    objetivos_candidatos, 
+                    self.ultimo_objetivo_visto
+                )
+            else:
+                # Elegir el más grande (más prominente)
+                objetivo = max(objetivos_candidatos, 
+                             key=lambda d: (d['bbox'][2] - d['bbox'][0]) * (d['bbox'][3] - d['bbox'][1]))
+        
+        # Guardar para siguiente frame
+        self.ultimo_objetivo_visto = objetivo
         
         # Calcular centro del objeto
         x1, y1, x2, y2 = objetivo['bbox']
         centro_x = (x1 + x2) / 2
         centro_y = (y1 + y2) / 2
         
-        # Normalizar posición (0-1)
-        pos_x = centro_x / frame_width
+        # Agregar a historial para suavizado
+        self.historial_posiciones.append((centro_x, centro_y, x2 - x1, y2 - y1))
+        if len(self.historial_posiciones) > self.max_historial:
+            self.historial_posiciones.pop(0)
         
-        # Área del objeto (para determinar distancia aproximada)
-        area = (x2 - x1) * (y2 - y1)
+        # Promediar posiciones (suavizado)
+        avg_centro_x = sum(p[0] for p in self.historial_posiciones) / len(self.historial_posiciones)
+        avg_centro_y = sum(p[1] for p in self.historial_posiciones) / len(self.historial_posiciones)
+        avg_width = sum(p[2] for p in self.historial_posiciones) / len(self.historial_posiciones)
+        avg_height = sum(p[3] for p in self.historial_posiciones) / len(self.historial_posiciones)
+        
+        # Normalizar posición (0-1)
+        pos_x = avg_centro_x / frame_width
+        pos_y = avg_centro_y / frame_height
+        
+        # Área del objeto (para determinar distancia)
+        area = avg_width * avg_height
         area_relativa = area / (frame_width * frame_height)
         
-        # Lógica de control basada en posición
-        ZONA_CENTRO = 0.15  # ±15% del centro
-        AREA_OBJETIVO_MIN = 0.15  # 15% del frame
-        AREA_OBJETIVO_MAX = 0.35  # 35% del frame
+        # Parámetros de control ajustados
+        ZONA_CENTRO_X = 0.20  # ±20% tolerancia horizontal (más amplia)
+        ZONA_CENTRO_Y = 0.25  # ±25% tolerancia vertical
+        AREA_OBJETIVO_MIN = 0.08  # 8% del frame (más sensible)
+        AREA_OBJETIVO_MAX = 0.45  # 45% del frame (evitar choques)
         
-        # Decidir comando
-        if pos_x < (0.5 - ZONA_CENTRO):
-            # Objeto a la izquierda
-            self.enviar_comando("left")
-        elif pos_x > (0.5 + ZONA_CENTRO):
-            # Objeto a la derecha
-            self.enviar_comando("right")
+        # Prioridad de decisión: primero centrar horizontalmente, luego ajustar distancia
+        comando = None
+        
+        # 1. Control horizontal (más prioritario)
+        error_horizontal = pos_x - 0.5
+        if abs(error_horizontal) > ZONA_CENTRO_X:
+            if error_horizontal < 0:
+                comando = "left"
+            else:
+                comando = "right"
+        
+        # 2. Control de distancia (si está centrado horizontalmente)
         elif area_relativa < AREA_OBJETIVO_MIN:
             # Objeto muy lejos, acercarse
-            self.enviar_comando("forward")
+            comando = "forward"
         elif area_relativa > AREA_OBJETIVO_MAX:
             # Objeto muy cerca, alejarse
-            self.enviar_comando("backward")
+            comando = "backward"
         else:
-            # Objeto centrado y a distancia correcta
-            self.enviar_comando("stop")
+            # Objetivo centrado y a distancia correcta
+            comando = "stop"
+        
+        # Enviar comando
+        self.enviar_comando(comando)
+    
+    def _seleccionar_objetivo_cercano(self, candidatos, ultimo):
+        """Selecciona el candidato más cercano al último objetivo visto"""
+        ultimo_x1, ultimo_y1, ultimo_x2, ultimo_y2 = ultimo['bbox']
+        ultimo_cx = (ultimo_x1 + ultimo_x2) / 2
+        ultimo_cy = (ultimo_y1 + ultimo_y2) / 2
+        
+        mejor_candidato = candidatos[0]
+        menor_distancia = float('inf')
+        
+        for candidato in candidatos:
+            x1, y1, x2, y2 = candidato['bbox']
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+            
+            # Distancia euclidiana
+            distancia = ((cx - ultimo_cx) ** 2 + (cy - ultimo_cy) ** 2) ** 0.5
+            
+            if distancia < menor_distancia:
+                menor_distancia = distancia
+                mejor_candidato = candidato
+        
+        return mejor_candidato
     
     def obtener_socket_udp(self, port, rcvbuf=8388608):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -416,11 +504,18 @@ class CamaraModerna:
                 self.seguimiento_activo = not self.seguimiento_activo
                 if not self.seguimiento_activo:
                     self.enviar_comando("stop")
+                    self.historial_posiciones.clear()
+                    self.frames_sin_objetivo = 0
+                    self.ultimo_objetivo_visto = None
+                else:
+                    print(f"🎯 Iniciando seguimiento de: {self.objeto_seguir}")
                 print(f"{'🎯' if self.seguimiento_activo else '⏸️'} Seguimiento: {'ACTIVO' if self.seguimiento_activo else 'DESACTIVADO'}")
             
             elif key == 9:  # TAB
                 self.indice_objeto = (self.indice_objeto + 1) % len(self.objetos_disponibles)
                 self.objeto_seguir = self.objetos_disponibles[self.indice_objeto]
+                self.ultimo_objetivo_visto = None
+                self.historial_posiciones.clear()
                 print(f"🎯 Objeto a seguir: {self.objeto_seguir}")
             
             elif key == ord('r') or key == ord('R'):
