@@ -193,8 +193,8 @@ class CamaraModerna:
         # Parámetros de control ajustados
         ZONA_CENTRO_X = 0.25  # ±25% tolerancia horizontal
         ZONA_CENTRO_Y = 0.30  # ±30% tolerancia vertical
-        AREA_OBJETIVO_MIN = 0.12  # 12% del frame - cuando esté más pequeño, acercarse
-        AREA_OBJETIVO_MAX = 0.40  # 40% del frame - cuando esté más grande, parar
+        AREA_OBJETIVO_MIN = 0.25  # 25% del frame - MÁS GRANDE para que se acerque más
+        AREA_OBJETIVO_MAX = 0.50  # 50% del frame - cuando esté MUY grande, parar
         
         # Prioridad de decisión: primero centrar horizontalmente, luego ajustar distancia
         comando = None
