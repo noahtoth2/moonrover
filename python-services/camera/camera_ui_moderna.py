@@ -40,9 +40,9 @@ class CamaraModerna:
         # Mejoras de seguimiento
         self.ultimo_objetivo_visto = None
         self.frames_sin_objetivo = 0
-        self.max_frames_sin_objetivo = 10  # Tolerancia antes de detenerse
+        self.max_frames_sin_objetivo = 15  # Mayor tolerancia antes de detenerse
         self.historial_posiciones = []  # Para suavizado de movimiento
-        self.max_historial = 3
+        self.max_historial = 5  # Más historial para suavizado mayor
         
         # MQTT para control
         self.mqtt_client = None
@@ -95,7 +95,8 @@ class CamaraModerna:
     def enviar_comando(self, cmd):
         """Envía comando de movimiento vía MQTT"""
         ahora = time.time()
-        if cmd == self.ultimo_comando and (ahora - self.tiempo_ultimo_comando) < 0.1:
+        # Reducir tiempo entre comandos para respuesta más rápida
+        if cmd == self.ultimo_comando and (ahora - self.tiempo_ultimo_comando) < 0.2:
             return
         
         self.ultimo_comando = cmd
@@ -104,6 +105,7 @@ class CamaraModerna:
         if self.mqtt_client and self.mqtt_conectado:
             try:
                 self.mqtt_client.publish("rover/control", cmd, qos=0)
+                # Mostrar área y comando para debug
             except:
                 pass
     
@@ -185,11 +187,14 @@ class CamaraModerna:
         area = avg_width * avg_height
         area_relativa = area / (frame_width * frame_height)
         
+        # Debug: mostrar área relativa
+        print(f"📊 Área: {area_relativa:.2%} | Pos X: {pos_x:.2f}", end=" | ")
+        
         # Parámetros de control ajustados
-        ZONA_CENTRO_X = 0.20  # ±20% tolerancia horizontal (más amplia)
-        ZONA_CENTRO_Y = 0.25  # ±25% tolerancia vertical
-        AREA_OBJETIVO_MIN = 0.08  # 8% del frame (más sensible)
-        AREA_OBJETIVO_MAX = 0.45  # 45% del frame (evitar choques)
+        ZONA_CENTRO_X = 0.25  # ±25% tolerancia horizontal
+        ZONA_CENTRO_Y = 0.30  # ±30% tolerancia vertical
+        AREA_OBJETIVO_MIN = 0.12  # 12% del frame - cuando esté más pequeño, acercarse
+        AREA_OBJETIVO_MAX = 0.40  # 40% del frame - cuando esté más grande, parar
         
         # Prioridad de decisión: primero centrar horizontalmente, luego ajustar distancia
         comando = None
@@ -202,16 +207,19 @@ class CamaraModerna:
             else:
                 comando = "right"
         
-        # 2. Control de distancia (si está centrado horizontalmente)
+        # 2. Control de distancia (SOLO si está centrado horizontalmente)
         elif area_relativa < AREA_OBJETIVO_MIN:
-            # Objeto muy lejos, acercarse
+            # Objeto pequeño = LEJOS, acercarse
             comando = "forward"
         elif area_relativa > AREA_OBJETIVO_MAX:
-            # Objeto muy cerca, alejarse
-            comando = "backward"
-        else:
-            # Objetivo centrado y a distancia correcta
+            # Objeto grande = MUY CERCA, solo parar
             comando = "stop"
+        else:
+            # Distancia correcta
+            comando = "stop"
+        
+        # Debug: mostrar comando
+        print(f"CMD: {comando}")
         
         # Enviar comando
         self.enviar_comando(comando)
