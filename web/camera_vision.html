@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rover Vision AI - Cámara en Vivo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #2a5298;
+            font-size: 2em;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .header h1::before {
+            content: "📹";
+            font-size: 1.2em;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        #videoCanvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .status-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+        }
+
+        .status-badge {
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-card.green {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .stat-card.orange {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #757F9A 0%, #D7DDE8 100%);
+            color: #333;
+        }
+
+        .btn.active {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4);
+        }
+
+        .detections-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .detection-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .detection-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .detection-confidence {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            color: #999;
+            font-size: 0.85em;
+            margin-top: 20px;
+        }
+
+        .no-connection {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar personalizado */
+        .detections-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .detections-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .detections-list::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        .detections-list::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Rover Vision AI</h1>
+            <p>Cámara ESP32 con Detección de Objetos en Tiempo Real</p>
+        </div>
+
+        <div class="video-container">
+            <img id="videoCanvas" src="http://localhost:5000/video_feed" style="width: 100%; height: auto; border-radius: 10px;">
+            <div class="status-overlay">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <span id="statusText">Conectando...</span>
+                </div>
+                <div class="status-badge">
+                    <span id="fpsText">0 FPS</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Objetos Detectados</div>
+                <div class="stat-value" id="objectCount">0</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Confianza Promedio</div>
+                <div class="stat-value" id="avgConfidence">0%</div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-label">Frames Procesados</div>
+                <div class="stat-value" id="frameCount">0</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="btnYolo" onclick="toggleYolo()">
+                🤖 Activar YOLO
+            </button>
+            <button class="btn btn-secondary" id="btnRotate" onclick="rotateCamera()">
+                🔄 Rotar Cámara
+            </button>
+            <button class="btn btn-success" id="btnTracking" onclick="toggleTracking()">
+                🎯 Seguimiento Auto
+            </button>
+            <button class="btn btn-danger" onclick="stopRover()">
+                ⏹️ Detener Rover
+            </button>
+        </div>
+
+        <div class="detections-list" id="detectionsList">
+            <div class="no-connection">
+                <div class="loading"></div>
+                <p>Esperando conexión con ESP32...</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🌙 MoonRover Project • Puerto UDP: 5005 • MQTT: 192.168.1.102:1883</p>
+        </div>
+    </div>
+
+    <script>
+        // Configuración
+        const ESP32_IP = '192.168.1.101'; // Cambiar a la IP del ESP32
+        const UDP_PORT = 5005;
+        const MQTT_BROKER = '192.168.1.102';
+        const MQTT_PORT = 1883;
+
+        // Estado
+        let yoloEnabled = false;
+        let trackingEnabled = false;
+        let rotation = 0;
+        let fps = 0;
+        let frameCounter = 0;
+        let lastFpsUpdate = Date.now();
+        let detections = [];
+
+        // Canvas
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Simulación de recepción de video (WebSocket o HTTP streaming)
+        // En producción, usar WebSocket para video en tiempo real
+        
+        function updateStats() {
+            // Simular actualización de estadísticas
+            document.getElementById('objectCount').textContent = detections.length;
+            document.getElementById('fpsText').textContent = fps + ' FPS';
+            document.getElementById('frameCount').textContent = frameCounter;
+            
+            if (detections.length > 0) {
+                const avgConf = detections.reduce((sum, d) => sum + d.confidence, 0) / detections.length;
+                document.getElementById('avgConfidence').textContent = Math.round(avgConf) + '%';
+            }
+        }
+
+        function updateDetectionsList() {
+            const list = document.getElementById('detectionsList');
+            
+            if (detections.length === 0) {
+                list.innerHTML = '<div class="no-connection"><p>No hay objetos detectados</p></div>';
+                return;
+            }
+            
+            list.innerHTML = detections.map(d => `
+                <div class="detection-item">
+                    <span class="detection-name">${d.name}</span>
+                    <span class="detection-confidence">${d.confidence}%</span>
+                </div>
+            `).join('');
+        }
+
+        function toggleYolo() {
+            yoloEnabled = !yoloEnabled;
+            const btn = document.getElementById('btnYolo');
+            
+            if (yoloEnabled) {
+                btn.classList.add('active');
+                btn.innerHTML = '🤖 YOLO Activo';
+                sendMqttCommand('yolo_on');
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '🤖 Activar YOLO';
+                sendMqttCommand('yolo_off');
+                detections = [];
+                updateDetectionsList();
+            }
+        }
+
+        function toggleTracking() {
+            trackingEnabled = !trackingEnabled;
+            const btn = document.getElementById('btnTracking');
+            
+            if (trackingEnabled) {
+                btn.classList.add('active');
+                btn.innerHTML = '🎯 Tracking ON';
+                sendMqttCommand('tracking_on');
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '🎯 Seguimiento Auto';
+                sendMqttCommand('tracking_off');
+            }
+        }
+
+        function rotateCamera() {
+            rotation = (rotation + 90) % 360;
+            sendMqttCommand('rotate_' + rotation);
+            console.log('Cámara rotada:', rotation + '°');
+        }
+
+        function stopRover() {
+            sendMqttCommand('stop');
+            console.log('Rover detenido');
+        }
+
+        function sendMqttCommand(command) {
+            // Aquí implementar conexión MQTT real usando biblioteca MQTT.js
+            // Por ahora, solo log
+            console.log('MQTT Command:', command);
+            
+            // fetch('/api/mqtt', {
+            //     method: 'POST',
+            //     headers: {'Content-Type': 'application/json'},
+            //     body: JSON.stringify({command: command})
+            // });
+        }
+
+        // Simulación de recepción de video
+        // En producción, reemplazar con WebSocket o MJPEG stream
+        function simulateVideoFrame() {
+            // Dibujar placeholder
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#667eea';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Esperando stream de ESP32...', canvas.width / 2, canvas.height / 2);
+            
+            frameCounter++;
+            
+            // Calcular FPS
+            const now = Date.now();
+            if (now - lastFpsUpdate >= 1000) {
+                fps = Math.round(frameCounter * 1000 / (now - lastFpsUpdate));
+                frameCounter = 0;
+                lastFpsUpdate = now;
+                updateStats();
+            }
+        }
+
+        // Simular detecciones (para demo)
+        function simulateDetections() {
+            if (yoloEnabled && Math.random() > 0.7) {
+                const objects = ['person', 'car', 'dog', 'bottle', 'laptop'];
+                detections = [
+                    {
+                        name: objects[Math.floor(Math.random() * objects.length)],
+                        confidence: Math.round(45 + Math.random() * 50)
+                    }
+                ];
+                updateDetectionsList();
+            }
+        }
+
+        // Inicialización
+        canvas.width = 640;
+        canvas.height = 480;
+
+        // Actualizar cada 100ms
+        setInterval(() => {
+            simulateVideoFrame();
+            simulateDetections();
+        }, 100);
+
+        document.getElementById('statusText').textContent = 'Simulación Activa';
+
+        console.log('🎥 Rover Vision AI iniciado');
+        console.log('💡 Para video real, implementar WebSocket o MJPEG stream desde ESP32');
+    </script>
+</body>
+</html>
