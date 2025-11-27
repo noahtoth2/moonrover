@@ -91,11 +91,17 @@ class SimpleMQTTBroker:
     def manejar_cliente(self, client_socket, addr):
         """Maneja un cliente MQTT"""
         try:
-            client_socket.settimeout(60.0)
+            # Usar select para lectura no bloqueante en lugar de timeout
             self.clients[client_socket] = {"addr": addr, "id": None}
             
             while self.running:
                 try:
+                    # Usar select para lectura no bloqueante (timeout 1s)
+                    import select
+                    readable, _, _ = select.select([client_socket], [], [], 1.0)
+                    if not readable:
+                        continue
+                    
                     # Leer paquete MQTT
                     data = client_socket.recv(4096)
                     if not data:
@@ -104,8 +110,6 @@ class SimpleMQTTBroker:
                     # Procesar paquete MQTT
                     self.procesar_paquete(client_socket, data)
                     
-                except socket.timeout:
-                    continue
                 except Exception as e:
                     break
                     
@@ -234,12 +238,28 @@ class SimpleMQTTBroker:
             client_id = self.clients[client_socket].get("id", "unknown")
             print(f"📩 PUBLISH: {client_id} → [{topic}] {mensaje}")
             
-            # Retransmitir a suscriptores
+            # Retransmitir a suscriptores (no bloqueante)
             if topic in self.subscriptions:
-                for subscriber in self.subscriptions[topic]:
-                    if subscriber != client_socket and subscriber in self.clients:
+                import select
+                for subscriber in list(self.subscriptions[topic]):
+                    if subscriber == client_socket:
+                        continue
+                    try:
+                        # Comprobar si el socket es escribible sin bloquear
+                        _, writable, _ = select.select([], [subscriber], [], 0)
+                        if not writable:
+                            # No escribible ahora, saltar para no bloquear
+                            continue
+                        if subscriber in self.clients:
+                            try:
+                                subscriber.send(data)
+                            except (BlockingIOError, socket.error):
+                                # Socket lleno, saltar este envío
+                                pass
+                    except Exception:
+                        # Si falla el envío, remover de suscripciones
                         try:
-                            subscriber.send(data)
+                            self.subscriptions[topic].remove(subscriber)
                         except:
                             pass
             
