@@ -100,7 +100,8 @@ class CameraClient:
 
     def start(self):
         # cola interna de frames (max 1 para baja latencia)
-        self.frame_queue = threading.Queue(maxsize=1) if hasattr(threading, 'Queue') else __import__('queue').Queue(maxsize=1)
+        import queue
+        self.frame_queue = queue.Queue(maxsize=1)
 
         hilo_udp = threading.Thread(target=self._recibir_video_udp, daemon=True)
         hilo_video = threading.Thread(target=self._mostrar_video, daemon=True)
