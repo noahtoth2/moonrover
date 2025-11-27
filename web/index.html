@@ -2,9 +2,11 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+
   <title>STL Viewer</title>
   <link rel="stylesheet" href="css/styles.css">
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@1.12.1/dist/model-viewer.min.js"></script>
+
 </head>
 <body>
 
@@ -12,40 +14,50 @@
 
   <div id="carroseria">
     <div id="llantas-arriba">
+
       <div class="llanta-container">
         <model-viewer class="llanta" id="w1" src="./stl/Wheel.glb" camera-controls></model-viewer>
         <span class="vel">Velocidad: <b id="v1">0</b></span>
       </div>
+
       <div class="llanta-container">
         <model-viewer class="llanta" id="w2" src="./stl/Wheel.glb" camera-controls></model-viewer>
         <span class="vel">Velocidad: <b id="v2">0</b></span>
       </div>
+
     </div>
 
     <div id="llantas-medio">
+
       <div class="llanta-container">
         <model-viewer class="llanta" id="w3" src="./stl/Wheel.glb" camera-controls></model-viewer>
         <span class="vel">Velocidad: <b id="v3">0</b></span>
       </div>
+
       <div class="llanta-container">
         <model-viewer class="llanta" id="w4" src="./stl/Wheel.glb" camera-controls></model-viewer>
         <span class="vel">Velocidad: <b id="v4">0</b></span>
       </div>
+
     </div>
 
     <div id="llantas-abajo">
+
       <div class="llanta-container">
         <model-viewer class="llanta" id="w5" src="./stl/Wheel.glb" camera-controls></model-viewer>
         <span class="vel">Velocidad: <b id="v5">0</b></span>
       </div>
+
       <div class="llanta-container">
         <model-viewer class="llanta" id="w6" src="./stl/Wheel.glb" camera-controls></model-viewer>
         <span class="vel">Velocidad: <b id="v6">0</b></span>
       </div>
+
     </div>
+
   </div>
 
-  <!-- Carro principal -->
+  <!-- Carro principal (este sí puede auto-rotar si quieres) -->
   <div id="carro">
     <model-viewer id="coche" 
       src="./stl/Perseverance - Mars Land Rover (Mars 2021).glb" 
@@ -55,36 +67,13 @@
     </model-viewer>
 
     <img src="http://192.168.1.103:5000/video_feed" alt="Cámara Rover">
+
+
   </div>
 
+  
+
 </div>
-
-<script>
-  // ================= WebSocket para actualizar velocidades =================
-  const ws = new WebSocket("ws://192.168.1.103:8765"); // Cambia IP si es necesario
-
-  ws.onopen = () => {
-    console.log("✅ Conectado al WebSocket");
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      const velocidades = data.velocidades; // Array [v1,v2,v3,v4,v5,v6]
-      if (velocidades && velocidades.length === 6) {
-        for (let i = 0; i < 6; i++) {
-          const el = document.getElementById("v" + (i + 1));
-          if (el) el.textContent = velocidades[i].toFixed(2);
-        }
-      }
-    } catch (err) {
-      console.error("❌ Error parseando WebSocket:", err);
-    }
-  };
-
-  ws.onclose = () => console.log("⚠️ WebSocket desconectado");
-  ws.onerror = (err) => console.error("⚠️ WebSocket error:", err);
-</script>
 
 <script src="js/main.js"></script>
 </body>
