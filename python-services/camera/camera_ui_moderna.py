@@ -55,7 +55,7 @@ class CamaraModerna:
         # Cargar YOLO
         print("🤖 Cargando modelo YOLOv11n...")
         try:
-            self.model = YOLO('yolo11n.pt')
+            self.model = YOLO('yolo11m.pt')
             print("✅ Modelo cargado correctamente")
         except Exception as e:
             print(f"⚠️ Error cargando YOLO: {e}")
