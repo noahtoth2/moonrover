@@ -13,10 +13,35 @@ import threading
 import queue
 import cv2
 import numpy as np
-import os
-from datetime import datetime
+import signal
 from ultralytics import YOLO
 import paho.mqtt.client as mqtt
+
+
+# ============================================
+# 🎛️ CONFIGURACIÓN DE SEGUIMIENTO - AJUSTAR AQUÍ
+# ============================================
+
+# Zonas de tolerancia (0.0 - 1.0)
+ZONA_CENTRO_HORIZONTAL = 0.25  # ±25% - Más grande = menos giros
+ZONA_CENTRO_VERTICAL = 0.30    # ±30% - Tolerancia vertical
+
+# Umbrales de área del objeto (0.0 - 1.0)
+AREA_OBJETIVO_MIN = 0.60  # Objeto pequeño -> AVANZAR (60% = acercarse mucho)
+AREA_OBJETIVO_MAX = 0.80  # Objeto grande -> PARAR (80% = muy cerca)
+
+# Tiempos de comando (en segundos)
+TIEMPO_MAX_GIRO = 0.3      # Máximo tiempo girando continuo
+TIEMPO_MAX_AVANCE = 0.4    # Máximo tiempo avanzando continuo
+TIEMPO_ENTRE_GIROS = 0.15  # Pausa mínima entre giros
+TIEMPO_ENTRE_AVANCE = 0.1  # Pausa mínima entre avances
+TIEMPO_ENTRE_STOP = 0.2    # Pausa mínima entre stops
+
+# Suavizado de movimiento
+MAX_HISTORIAL_POSICIONES = 5  # Más = más suave pero más lento
+MAX_FRAMES_SIN_OBJETIVO = 15  # Frames antes de detenerse
+
+# ============================================
 
 
 class CamaraModerna:
@@ -40,13 +65,15 @@ class CamaraModerna:
         # Mejoras de seguimiento
         self.ultimo_objetivo_visto = None
         self.frames_sin_objetivo = 0
-        self.max_frames_sin_objetivo = 15  # Mayor tolerancia antes de detenerse
-        self.historial_posiciones = []  # Para suavizado de movimiento
-        self.max_historial = 5  # Más historial para suavizado mayor
+        self.max_frames_sin_objetivo = MAX_FRAMES_SIN_OBJETIVO
+        self.historial_posiciones = []
+        self.max_historial = MAX_HISTORIAL_POSICIONES
         
-        # Control de duración de giros
+        # Control de duración de comandos
         self.tiempo_inicio_giro = 0
-        self.max_duracion_giro = 0.5  # Máximo 0.5 segundos de giro continuo
+        self.max_duracion_giro = TIEMPO_MAX_GIRO
+        self.tiempo_inicio_avance = 0
+        self.max_duracion_avance = TIEMPO_MAX_AVANCE
         
         # MQTT para control
         self.mqtt_client = None
@@ -58,10 +85,6 @@ class CamaraModerna:
         
         # Estadísticas
         self.fps = 0
-        self.frame_count = 0
-        self.tiempo_inicio = time.time()
-        self.objetos_totales = 0
-        self.confianza_promedio = 0
         
         # Cargar YOLO
         print("🤖 Cargando modelo YOLOv11n...")
@@ -99,8 +122,15 @@ class CamaraModerna:
     def enviar_comando(self, cmd):
         """Envía comando de movimiento vía MQTT"""
         ahora = time.time()
-        # Reducir tiempo entre comandos para respuesta más rápida
-        if cmd == self.ultimo_comando and (ahora - self.tiempo_ultimo_comando) < 0.2:
+        # Tiempo diferente según el tipo de comando
+        if cmd in ["left", "right"]:
+            tiempo_minimo = TIEMPO_ENTRE_GIROS
+        elif cmd == "forward":
+            tiempo_minimo = TIEMPO_ENTRE_AVANCE
+        else:
+            tiempo_minimo = TIEMPO_ENTRE_STOP
+            
+        if cmd == self.ultimo_comando and (ahora - self.tiempo_ultimo_comando) < tiempo_minimo:
             return
         
         self.ultimo_comando = cmd
@@ -109,7 +139,6 @@ class CamaraModerna:
         if self.mqtt_client and self.mqtt_conectado:
             try:
                 self.mqtt_client.publish("rover/control", cmd, qos=0)
-                # Mostrar área y comando para debug
             except:
                 pass
     
@@ -195,10 +224,10 @@ class CamaraModerna:
         print(f"📊 Área: {area_relativa:.2%} | Pos X: {pos_x:.2f}", end=" | ")
         
         # Parámetros de control ajustados
-        ZONA_CENTRO_X = 0.25  # ±25% tolerancia horizontal
-        ZONA_CENTRO_Y = 0.30  # ±30% tolerancia vertical
-        AREA_OBJETIVO_MIN = 0.60  # 25% del frame - MÁS GRANDE para que se acerque más
-        AREA_OBJETIVO_MAX = 0.80  # 50% del frame - cuando esté MUY grande, parar
+        ZONA_CENTRO_X = ZONA_CENTRO_HORIZONTAL
+        ZONA_CENTRO_Y = ZONA_CENTRO_VERTICAL
+        AREA_MIN = AREA_OBJETIVO_MIN
+        AREA_MAX = AREA_OBJETIVO_MAX
         
         # Prioridad de decisión: primero centrar horizontalmente, luego ajustar distancia
         comando = None
@@ -227,18 +256,34 @@ class CamaraModerna:
                 self.tiempo_inicio_giro = ahora
         
         # 2. Control de distancia (SOLO si está centrado horizontalmente)
-        elif area_relativa < AREA_OBJETIVO_MIN:
+        elif area_relativa < AREA_MIN:
             # Objeto pequeño = LEJOS, acercarse
-            comando = "forward"
+            # Limitar tiempo continuo de avance
+            ahora = time.time()
+            if self.ultimo_comando == "forward":
+                if self.tiempo_inicio_avance > 0 and (ahora - self.tiempo_inicio_avance) > self.max_duracion_avance:
+                    # Ya avanzó suficiente, hacer pausa para reevaluar
+                    comando = "stop"
+                    self.tiempo_inicio_avance = 0
+                else:
+                    comando = "forward"
+                    if self.tiempo_inicio_avance == 0:
+                        self.tiempo_inicio_avance = ahora
+            else:
+                comando = "forward"
+                self.tiempo_inicio_avance = ahora
+            
             self.tiempo_inicio_giro = 0  # Reset del contador de giro
-        elif area_relativa > AREA_OBJETIVO_MAX:
+        elif area_relativa > AREA_MAX:
             # Objeto grande = MUY CERCA, solo parar
             comando = "stop"
             self.tiempo_inicio_giro = 0
+            self.tiempo_inicio_avance = 0
         else:
             # Distancia correcta
             comando = "stop"
             self.tiempo_inicio_giro = 0
+            self.tiempo_inicio_avance = 0
         
         # Debug: mostrar comando
         print(f"CMD: {comando}")
@@ -295,8 +340,6 @@ class CamaraModerna:
         sock = self.obtener_socket_udp(self.port)
         buffer = bytearray()
         expected_size = None
-        ultimo_frame = time.time()
-        sin_frames = 0
         
         while self.control_event.is_set():
             try:
@@ -321,36 +364,29 @@ class CamaraModerna:
                         )
                         
                         if frame is not None:
-                            # vaciar cola antigua
-                            try:
-                                while True:
+                            # Vaciar cola y agregar nuevo frame
+                            while not self.frame_queue.empty():
+                                try:
                                     self.frame_queue.get_nowait()
-                            except Exception:
-                                pass
+                                except:
+                                    break
                             
                             try:
                                 self.frame_queue.put_nowait(frame)
-                                ultimo_frame = time.time()
-                                sin_frames = 0
-                            except Exception:
+                            except:
                                 pass
                         
                         expected_size = None
                         buffer = bytearray()
                     
                     elif len(buffer) > expected_size + 50000:
-                        # Buffer demasiado grande, resetear
                         buffer = bytearray()
                         expected_size = None
             
             except socket.timeout:
-                if len(buffer) > 0:
+                if buffer:
                     buffer = bytearray()
                     expected_size = None
-                
-                sin_frames += 1
-                if sin_frames == 5:
-                    print("⚠️ Sin video (¿ESP32 CAM desconectado?)")
             
             except Exception:
                 buffer = bytearray()
@@ -457,7 +493,6 @@ class CamaraModerna:
                             
                             # Extraer detecciones
                             self.detecciones = []
-                            confianzas = []
                             
                             for box in results[0].boxes:
                                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
@@ -470,10 +505,6 @@ class CamaraModerna:
                                     'conf': conf * 100,
                                     'clase': clase
                                 })
-                                confianzas.append(conf * 100)
-                            
-                            # Calcular confianza promedio
-                            self.confianza_promedio = np.mean(confianzas) if confianzas else 0
                             
                             # Dibujar bounding boxes
                             frame = results[0].plot()
@@ -566,8 +597,6 @@ class CamaraModerna:
 
 
 def main():
-    import signal
-    
     print("=" * 70)
     print("🎨 ROVER VISION AI - INTERFAZ MODERNA CON SEGUIMIENTO AUTÓNOMO")
     print("=" * 70)
@@ -593,11 +622,11 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     
     camara = CamaraModerna(control_event, port=5005)
-    hilo_udp, hilo_video = camara.start()
+    camara.start()
     
     try:
-        hilo_udp.join()
-        hilo_video.join()
+        while control_event.is_set():
+            time.sleep(0.1)
     except KeyboardInterrupt:
         control_event.clear()
     
