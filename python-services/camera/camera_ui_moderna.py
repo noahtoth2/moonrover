@@ -44,6 +44,10 @@ class CamaraModerna:
         self.historial_posiciones = []  # Para suavizado de movimiento
         self.max_historial = 5  # Más historial para suavizado mayor
         
+        # Control de duración de giros
+        self.tiempo_inicio_giro = 0
+        self.max_duracion_giro = 0.5  # Máximo 0.5 segundos de giro continuo
+        
         # MQTT para control
         self.mqtt_client = None
         self.mqtt_conectado = False
@@ -202,21 +206,40 @@ class CamaraModerna:
         # 1. Control horizontal (más prioritario)
         error_horizontal = pos_x - 0.5
         if abs(error_horizontal) > ZONA_CENTRO_X:
-            if error_horizontal < 0:
-                comando = "left"
+            # Verificar si ya lleva mucho tiempo girando
+            ahora = time.time()
+            if self.ultimo_comando in ["left", "right"]:
+                if (ahora - self.tiempo_inicio_giro) > self.max_duracion_giro:
+                    # Ya giró suficiente, hacer pausa
+                    comando = "stop"
+                    self.tiempo_inicio_giro = 0
+                else:
+                    # Seguir girando
+                    if error_horizontal < 0:
+                        comando = "left"
+                    else:
+                        comando = "right"
             else:
-                comando = "right"
+                # Iniciar nuevo giro
+                if error_horizontal < 0:
+                    comando = "left"
+                else:
+                    comando = "right"
+                self.tiempo_inicio_giro = ahora
         
         # 2. Control de distancia (SOLO si está centrado horizontalmente)
         elif area_relativa < AREA_OBJETIVO_MIN:
             # Objeto pequeño = LEJOS, acercarse
             comando = "forward"
+            self.tiempo_inicio_giro = 0  # Reset del contador de giro
         elif area_relativa > AREA_OBJETIVO_MAX:
             # Objeto grande = MUY CERCA, solo parar
             comando = "stop"
+            self.tiempo_inicio_giro = 0
         else:
             # Distancia correcta
             comando = "stop"
+            self.tiempo_inicio_giro = 0
         
         # Debug: mostrar comando
         print(f"CMD: {comando}")
