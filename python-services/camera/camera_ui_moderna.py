@@ -23,19 +23,19 @@ import paho.mqtt.client as mqtt
 # ============================================
 
 # Zonas de tolerancia (0.0 - 1.0)
-ZONA_CENTRO_HORIZONTAL = 0.25  # ±25% - Más grande = menos giros
-ZONA_CENTRO_VERTICAL = 0.30    # ±30% - Tolerancia vertical
+ZONA_CENTRO_HORIZONTAL = 0.1  # ±25% - Más grande = menos giros
+ZONA_CENTRO_VERTICAL = 0.6    # ±30% - Tolerancia vertical
 
 # Umbrales de área del objeto (0.0 - 1.0)
-AREA_OBJETIVO_MIN = 0.60  # Objeto pequeño -> AVANZAR (60% = acercarse mucho)
-AREA_OBJETIVO_MAX = 0.80  # Objeto grande -> PARAR (80% = muy cerca)
+AREA_OBJETIVO_MIN = 0.8  # Objeto pequeño -> AVANZAR (60% = acercarse mucho)
+AREA_OBJETIVO_MAX = 1  # Objeto grande -> PARAR (80% = muy cerca)
 
 # Tiempos de comando (en segundos)
-TIEMPO_MAX_GIRO = 0.3      # Máximo tiempo girando continuo
-TIEMPO_MAX_AVANCE = 0.4    # Máximo tiempo avanzando continuo
-TIEMPO_ENTRE_GIROS = 0.15  # Pausa mínima entre giros
+TIEMPO_MAX_GIRO = 0.1      # Máximo tiempo girando continuo
+TIEMPO_MAX_AVANCE = 0.1    # Máximo tiempo avanzando continuo
+TIEMPO_ENTRE_GIROS = 0.1  # Pausa mínima entre giros
 TIEMPO_ENTRE_AVANCE = 0.1  # Pausa mínima entre avances
-TIEMPO_ENTRE_STOP = 0.2    # Pausa mínima entre stops
+TIEMPO_ENTRE_STOP = 0.1    # Pausa mínima entre stops
 
 # Suavizado de movimiento
 MAX_HISTORIAL_POSICIONES = 5  # Más = más suave pero más lento
