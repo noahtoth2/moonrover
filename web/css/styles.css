@@ -11,31 +11,75 @@ model-viewer {
   background: none;
 }
 
-/* === CONTENEDOR CON PERSPECTIVA REAL === */
+
+
+/* ==== MARCO ==== */
+.marco {
+  position: relative;
+  width: 220px;   /* AJUSTA SI QUIERES */
+  height: 220px;
+}
+
+.marco-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none; /* Evita bloquear el model-viewer */
+}
+
+/* ==== CONTENIDO DENTRO DEL MARCO ==== */
 .llanta-container {
-  perspective: 1200px !important; 
-  
+  position: absolute;
+
+  /* CENTRADO EXACTO */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  width: 75%;     /* evita que el modelo choque con el borde del marco */
+  height: 75%;
+
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #00ffcc;
+  justify-content: center;  /* centra también verticalmente */
+
+  perspective: 1200px !important;
+
+  /* EFECTO CYBER */
+  color: #ffffff;
   font-size: 16px;
   font-weight: bold;
+
+  text-shadow:
+    0 0 5px #0abfff,
+    0 0 10px #0abfff,
+    0 0 20px #29d2ff,
+    0 0 40px #3ae8ff,
+    0 0 80px #6af7ff,
+    0 0 100px #9dfcff;
 }
 
-/* === LLANTAS — 3D SIN DEFORMACIÓN === */
+/* ANIMACIÓN DE PULSO */
+@keyframes cyberPulse {
+  0%   { text-shadow: 0 0 8px #00bfff, 0 0 30px #00eaff; }
+  50%  { text-shadow: 0 0 15px #00eaff, 0 0 60px #6af7ff; }
+  100% { text-shadow: 0 0 8px #00bfff, 0 0 30px #00eaff; }
+}
+
+/* === LLANTAS 3D === */
 .llanta {
-  width: 200px;
-  height: 200px;
-
+  width: 150px;     /* ahora sí cabe perfecto */
+  height: 150px;
   transform-style: preserve-3d !important;
- 
 }
+
 
 /* Tamaño coche */
 #coche {
-  width: 800px;
-  height: 800px;
+  width: 500px;
+  height: 450px;
+ 
 }
 
 /* Filas */
@@ -51,20 +95,59 @@ model-viewer {
 /* Contenedor principal */
 #contenedor-principal {
   display: flex;
-  flex-direction: row;
+  flex-direction: row
 }
 
 #carroseria {
   width: 50%;
 }
 
+
 #carro {
-  width: 50%;
+
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
 }
 
 .vel b {
-  color: #ffee00;
+  color: #ffffff;
+}
+
+/* Marco grande */
+.marco-grande {
+  position: relative;
+  width: 600px;   /* AJUSTA SI NECESITAS */
+  height: 400px;
+}
+
+.marco-grande .marco-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/* Contenedor interno para centrar el coche */
+.carro-container {
+  position: absolute;
+
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  width: 80%;   /* Haz más grande o pequeño el modelo */
+  height: 80%;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Tamaño del model-viewer del coche */
+#coche {
+  width: 100%;
+  height: 100%;
+  background: none;
 }

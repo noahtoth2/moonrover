@@ -15,65 +15,99 @@
   <div id="carroseria">
     <div id="llantas-arriba">
 
-      <div class="llanta-container">
-        <model-viewer class="llanta" id="w1" src="./stl/Wheel.glb" camera-controls></model-viewer>
-        <span class="vel">Velocidad: <b id="v1">0</b></span>
+      
+
+           <div class="marco">
+        <img src="images/marco-llantas.png" class="marco-img" />
+        <div class="llanta-container">
+          <model-viewer class="llanta" id="w1" src="./stl/Wheel.glb" camera-controls></model-viewer>
+          <span class="vel">Velocidad: <b id="v1">0</b></span>
+        </div>
       </div>
 
-      <div class="llanta-container">
-        <model-viewer class="llanta" id="w2" src="./stl/Wheel.glb" camera-controls></model-viewer>
-        <span class="vel">Velocidad: <b id="v2">0</b></span>
-      </div>
 
+      <div class="marco">
+        <img src="images/marco-llantas.png" class="marco-img" />
+        <div class="llanta-container">
+          <model-viewer class="llanta" id="w2" src="./stl/Wheel.glb" camera-controls></model-viewer>
+          <span class="vel">Velocidad: <b id="v2">0</b></span>
+        </div>
+      </div>
     </div>
 
+    
     <div id="llantas-medio">
 
-      <div class="llanta-container">
-        <model-viewer class="llanta" id="w3" src="./stl/Wheel.glb" camera-controls></model-viewer>
-        <span class="vel">Velocidad: <b id="v3">0</b></span>
+      <div class="marco">
+        <img src="images/marco-llantas.png" class="marco-img" />
+        <div class="llanta-container">
+          <model-viewer class="llanta" id="w3" src="./stl/Wheel.glb" camera-controls></model-viewer>
+          <span class="vel">Velocidad: <b id="v3">0</b></span>
+      </div>
       </div>
 
-      <div class="llanta-container">
-        <model-viewer class="llanta" id="w4" src="./stl/Wheel.glb" camera-controls></model-viewer>
-        <span class="vel">Velocidad: <b id="v4">0</b></span>
+      
+      <div class="marco">
+        <img src="images/marco-llantas.png" class="marco-img" />
+        <div class="llanta-container">
+          <model-viewer class="llanta" id="w4" src="./stl/Wheel.glb" camera-controls></model-viewer>
+          <span class="vel">Velocidad: <b id="v4">0</b></span>
+        </div>
       </div>
-
     </div>
 
     <div id="llantas-abajo">
 
-      <div class="llanta-container">
-        <model-viewer class="llanta" id="w5" src="./stl/Wheel.glb" camera-controls></model-viewer>
-        <span class="vel">Velocidad: <b id="v5">0</b></span>
+   
+      <div class="marco">
+        <img src="images/marco-llantas.png" class="marco-img" />
+        <div class="llanta-container">
+          <model-viewer class="llanta" id="w5" src="./stl/Wheel.glb" camera-controls></model-viewer>
+          <span class="vel">Velocidad: <b id="v5">0</b></span>
+        </div>
       </div>
-
-      <div class="llanta-container">
-        <model-viewer class="llanta" id="w6" src="./stl/Wheel.glb" camera-controls></model-viewer>
-        <span class="vel">Velocidad: <b id="v6">0</b></span>
+      
+      <div class="marco">
+        <img src="images/marco-llantas.png" class="marco-img" />
+        <div class="llanta-container">
+          <model-viewer class="llanta" id="w6" src="./stl/Wheel.glb" camera-controls></model-viewer>
+          <span class="vel">Velocidad: <b id="v6">0</b></span>
+        </div>
       </div>
 
     </div>
 
   </div>
 
-  <!-- Carro principal (este sí puede auto-rotar si quieres) -->
-  <div id="carro">
-    <model-viewer id="coche" 
-      src="./stl/Perseverance - Mars Land Rover (Mars 2021).glb" 
-      alt="Mi STL" 
-      auto-rotate 
-      camera-controls>
-    </model-viewer>
+<div id="carro">
+      
+  <div class="marco-grande">
+    <img src="images/marco-grande.png" class="marco-img" />
 
-    <img src="http://192.168.1.103:5000/video_feed" alt="Cámara Rover">
-
+    <div class="carro-container">
+      <model-viewer id="coche" 
+        src="./stl/Perseverance - Mars Land Rover (Mars 2021).glb" 
+        alt="Mi STL" 
+        auto-rotate 
+        camera-controls>
+      </model-viewer>
+    </div>
 
   </div>
 
+     <img src="images/ojo.gif" alt="ojoito" id="ojo">
+        </div>
+</div>
+
+
+
+
+
+
+
   
 
-</div>
+
 
 <script src="js/main.js"></script>
 </body>
