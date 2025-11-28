@@ -206,25 +206,24 @@ class CamaraModerna:
         # 1. Control horizontal (más prioritario)
         error_horizontal = pos_x - 0.5
         if abs(error_horizontal) > ZONA_CENTRO_X:
-            # Verificar si ya lleva mucho tiempo girando
+            # Verificar si ya lleva mucho tiempo girando en la MISMA dirección
             ahora = time.time()
-            if self.ultimo_comando in ["left", "right"]:
-                if (ahora - self.tiempo_inicio_giro) > self.max_duracion_giro:
-                    # Ya giró suficiente, hacer pausa
+            giro_actual = "left" if error_horizontal < 0 else "right"
+            
+            if self.ultimo_comando == giro_actual:
+                # Está girando en la misma dirección
+                if self.tiempo_inicio_giro > 0 and (ahora - self.tiempo_inicio_giro) > self.max_duracion_giro:
+                    # Ya giró suficiente, hacer pausa breve
                     comando = "stop"
                     self.tiempo_inicio_giro = 0
                 else:
                     # Seguir girando
-                    if error_horizontal < 0:
-                        comando = "left"
-                    else:
-                        comando = "right"
+                    comando = giro_actual
+                    if self.tiempo_inicio_giro == 0:
+                        self.tiempo_inicio_giro = ahora
             else:
-                # Iniciar nuevo giro
-                if error_horizontal < 0:
-                    comando = "left"
-                else:
-                    comando = "right"
+                # Cambió de dirección o es nuevo giro
+                comando = giro_actual
                 self.tiempo_inicio_giro = ahora
         
         # 2. Control de distancia (SOLO si está centrado horizontalmente)
